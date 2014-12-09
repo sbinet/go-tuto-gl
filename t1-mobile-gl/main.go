@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	glfw "github.com/go-gl/glfw3"
 	"github.com/go-gl/glh"
 	"golang.org/x/mobile/gl"
 )
@@ -45,11 +46,6 @@ func initOpenGl(window *glfw.Window, w, h int) {
 	w, h = window.GetSize() // query window to get screen pixels
 	width, height := window.GetFramebufferSize()
 	gl.Viewport(0, 0, width, height)
-	gl.MatrixMode(gl.PROJECTION)
-	gl.LoadIdentity()
-	gl.Ortho(0, float64(w), 0, float64(h), -1, 1)
-	gl.MatrixMode(gl.MODELVIEW)
-	gl.LoadIdentity()
 	gl.ClearColor(.25, .88, .83, 1) // turquoise
 }
 
@@ -71,7 +67,7 @@ func main() {
 	w.MakeContextCurrent()
 	glfw.SwapInterval(1)
 
-	gl.Init()
+	//gl.Init()
 
 	prog := glh.NewProgram(
 		glh.Shader{gl.VERTEX_SHADER, vshader},
@@ -90,5 +86,5 @@ func main() {
 		glfw.PollEvents()
 	}
 
-	gl.ProgramUnuse()
+	//gl.ProgramUnuse()
 }
