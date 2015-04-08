@@ -1,27 +1,35 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
+	"runtime"
 
-	"github.com/go-gl/gl"
-	glfw "github.com/go-gl/glfw3"
-	"github.com/go-gl/glh"
+	"github.com/go-gl/glfw/v3.1/glfw"
+	"golang.org/x/mobile/f32"
+	"golang.org/x/mobile/gl"
+	"golang.org/x/mobile/gl/glutil"
 )
 
 type context struct {
-	w       *glfw.Window
-	prog    gl.Program
-	pos     gl.Buffer
-	col     gl.Buffer
-	fade    gl.UniformLocation
+	w    *glfw.Window
+	prog gl.Program
+
+	posbuf  gl.Buffer
+	pos     gl.Attrib
 	posdata []float32
+
+	colbuf  gl.Buffer
+	col     gl.Attrib
 	coldata []float32
+
+	fade gl.Uniform
 }
 
 func (ctx *context) Delete() {
-	ctx.prog.Delete()
-	ctx.pos.Delete()
-	ctx.col.Delete()
+	gl.DeleteProgram(ctx.prog)
+	gl.DeleteBuffer(ctx.posbuf)
+	gl.DeleteBuffer(ctx.colbuf)
 }
 
 func onError(err glfw.ErrorCode, desc string) {
@@ -43,51 +51,34 @@ func onResize(window *glfw.Window, w, h int) {
 
 func display(ctx context) {
 	// clear the background as black
-	gl.ClearColor(0, 0, 0, 0)
+	gl.ClearColor(0, 0, 0, 1)
 	gl.Clear(gl.COLOR_BUFFER_BIT)
 
-	ctx.fade = ctx.prog.GetUniformLocation("fade")
-	ctx.fade.Uniform1f(0.5)
+	gl.UseProgram(ctx.prog)
 
-	ctx.col.Bind(gl.ARRAY_BUFFER)
-	colors := gl.AttribLocation(ctx.prog.GetAttribLocation("v_color"))
+	gl.Uniform1f(ctx.fade, 0.5)
 
-	ctx.pos.Bind(gl.ARRAY_BUFFER)
-	coord := gl.AttribLocation(ctx.prog.GetAttribLocation("coord"))
+	gl.EnableVertexAttribArray(ctx.col)
+	gl.EnableVertexAttribArray(ctx.pos)
 
-	coord.EnableArray()
-	colors.EnableArray()
+	gl.BindBuffer(gl.ARRAY_BUFFER, ctx.colbuf)
+	gl.VertexAttribPointer(ctx.col, 3, gl.FLOAT, false, 0, 0)
 
-	coord.AttribPointer(
-		4,          // number of elements per vertex: (x,y)
-		gl.FLOAT,   // type of each element
-		false,      // take our values as-is
-		0,          // no extra data between each position
-		uintptr(0), // offset of first element
-	)
+	gl.BindBuffer(gl.ARRAY_BUFFER, ctx.posbuf)
+	gl.VertexAttribPointer(ctx.pos, 4, gl.FLOAT, false, 0, 0)
+	gl.DrawArrays(gl.TRIANGLES, 0, 3)
 
-	colors.AttribPointer(
-		3,          // number of elements per vertex, here (r,g,b)
-		gl.FLOAT,   // the type of each element
-		false,      // take our values as-is
-		0,          // no extra data between each position
-		uintptr(0), // offset of first element
-	)
-
-	const sz = 4 // size of float32 in bytes
-	gl.DrawArrays(gl.TRIANGLES, 0, len(ctx.posdata)/sz)
-	coord.DisableArray()
-	colors.DisableArray()
+	gl.DisableVertexAttribArray(ctx.col)
+	gl.DisableVertexAttribArray(ctx.pos)
 
 	// display result
 	ctx.w.SwapBuffers()
 }
 
 func main() {
-	glfw.SetErrorCallback(onError)
-
-	if !glfw.Init() {
-		panic("init glfw")
+	err := glfw.Init()
+	if err != nil {
+		panic(err)
 	}
 	defer glfw.Terminate()
 
@@ -103,8 +94,6 @@ func main() {
 	gl.Enable(gl.BLEND)
 	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 
-	gl.Init()
-
 	ctx := context{
 		w: w,
 		posdata: []float32{
@@ -118,20 +107,34 @@ func main() {
 			1.0, 0.0, 0.0,
 		},
 	}
-	ctx.pos = genBuffer(ctx.posdata)
-	ctx.col = genBuffer(ctx.coldata)
-	ctx.prog = glh.NewProgram(
-		MustShader(gl.VERTEX_SHADER, "triangle.v.glsl"),
-		MustShader(gl.FRAGMENT_SHADER, "triangle.f.glsl"),
+	ctx.prog, err = glutil.CreateProgram(
+		newShader("triangle.v.glsl"),
+		newShader("triangle.f.glsl"),
 	)
-
+	if err != nil {
+		panic(err)
+	}
 	defer ctx.Delete()
 
-	ctx.prog.Use()
+	ctx.posbuf = gl.CreateBuffer()
+	gl.BindBuffer(gl.ARRAY_BUFFER, ctx.posbuf)
+	gl.BufferData(gl.ARRAY_BUFFER,
+		f32.Bytes(binary.LittleEndian, ctx.posdata...),
+		gl.STATIC_DRAW,
+	)
+	ctx.pos = gl.GetAttribLocation(ctx.prog, "coord")
+
+	ctx.colbuf = gl.CreateBuffer()
+	gl.BindBuffer(gl.ARRAY_BUFFER, ctx.colbuf)
+	gl.BufferData(gl.ARRAY_BUFFER,
+		f32.Bytes(binary.LittleEndian, ctx.coldata...),
+		gl.STATIC_DRAW,
+	)
+	ctx.col = gl.GetAttribLocation(ctx.prog, "v_color")
+	ctx.fade = gl.GetUniformLocation(ctx.prog, "fade")
+
 	ctx.w.SetSizeCallback(onResize)
 	ctx.w.SetKeyCallback(onKey)
-
-	ctx.prog.Link()
 
 	for !ctx.w.ShouldClose() {
 		display(ctx)
@@ -139,17 +142,8 @@ func main() {
 
 	}
 
-	gl.ProgramUnuse()
 }
 
-func genBuffer(data []float32) gl.Buffer {
-	const sz = 4 // size of float32 in bytes
-
-	buffer := gl.GenBuffer()
-	buffer.Bind(gl.ARRAY_BUFFER)
-
-	gl.BufferData(gl.ARRAY_BUFFER, len(data)*sz, data, gl.STATIC_DRAW)
-
-	buffer.Unbind(gl.ARRAY_BUFFER)
-	return buffer
+func init() {
+	runtime.LockOSThread()
 }
