@@ -1,11 +1,13 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
 
-	"github.com/go-gl/gl"
-	glfw "github.com/go-gl/glfw3"
-	"github.com/go-gl/glh"
+	"github.com/go-gl/glfw/v3.1/glfw"
+	"golang.org/x/mobile/f32"
+	"golang.org/x/mobile/gl"
+	"golang.org/x/mobile/gl/glutil"
 )
 
 const (
@@ -25,13 +27,6 @@ void main(void) {
 }`
 )
 
-type context struct {
-	w    *glfw.Window
-	prog gl.Program
-	pos  gl.Buffer
-	data []float32
-}
-
 func onError(err glfw.ErrorCode, desc string) {
 	fmt.Printf("%v: %v\n", err, desc)
 }
@@ -43,39 +38,16 @@ func onKey(w *glfw.Window, key glfw.Key, scancode int,
 	}
 }
 
-func onResize(window *glfw.Window, w, h int) {
-	gl.Viewport(0, 0, w, h)
-}
+func onResize(w *glfw.Window, width, height int) {
+	gl.Viewport(0, 0, width, height)
 
-func display(ctx context) {
-	// clear the background as black
-	gl.ClearColor(0, 0, 0, 0)
-	gl.Clear(gl.COLOR_BUFFER_BIT)
-
-	ctx.pos.Bind(gl.ARRAY_BUFFER)
-	coord := gl.AttribLocation(ctx.prog.GetAttribLocation("coord"))
-	coord.EnableArray()
-
-	coord.AttribPointer(
-		4,        // number of elements per vertex: (x,y)
-		gl.FLOAT, // type of each element
-		false,    // take our values as-is
-		0,
-		uintptr(0),
-	)
-	const sz = 4 // size of float32 in bytes
-	gl.DrawArrays(gl.TRIANGLES, 0, len(ctx.data)/sz)
-	coord.DisableArray()
-
-	// display result
-	ctx.w.SwapBuffers()
+	//heightUnif.Uniform1i(height)
 }
 
 func main() {
-	glfw.SetErrorCallback(onError)
-
-	if !glfw.Init() {
-		panic("init glfw")
+	err := glfw.Init()
+	if err != nil {
+		panic(err)
 	}
 	defer glfw.Terminate()
 
@@ -84,50 +56,49 @@ func main() {
 		panic(err)
 	}
 	defer w.Destroy()
+	w.SetKeyCallback(onKey)
 
 	w.MakeContextCurrent()
 	glfw.SwapInterval(1)
 
-	gl.Init()
+	//gl.Init()
 
-	ctx := context{
-		w: w,
-		data: []float32{
-			+0.0, +0.8, 0, 1,
-			-0.8, -0.8, 0, 1,
-			+0.8, -0.8, 0, 1,
-		},
+	prog, err := glutil.CreateProgram(vshader, fshader)
+	if err != nil {
+		panic(err)
 	}
-	ctx.pos = genVertexBuffer(ctx.data)
-	ctx.prog = glh.NewProgram(
-		glh.Shader{gl.VERTEX_SHADER, vshader},
-		glh.Shader{gl.FRAGMENT_SHADER, fshader},
+	defer gl.DeleteProgram(prog)
+	w.SetSizeCallback(onResize)
+	w.GetSize()
+
+	triangleData := []float32{
+		+0.0, +0.8, 0, 1,
+		-0.8, -0.8, 0, 1,
+		+0.8, -0.8, 0, 1,
+	}
+	buf := gl.CreateBuffer()
+	gl.BindBuffer(gl.ARRAY_BUFFER, buf)
+	gl.BufferData(gl.ARRAY_BUFFER,
+		f32.Bytes(binary.LittleEndian, triangleData...),
+		gl.STATIC_DRAW,
 	)
-	defer ctx.prog.Delete()
 
-	ctx.prog.Use()
-	ctx.w.SetSizeCallback(onResize)
-	ctx.w.SetKeyCallback(onKey)
+	coord := gl.GetAttribLocation(prog, "coord")
 
-	ctx.prog.Link()
+	gl.UseProgram(prog)
 
-	for !ctx.w.ShouldClose() {
-		display(ctx)
+	for !w.ShouldClose() {
+		gl.ClearColor(0, 0, 0, 1)
+		gl.Clear(gl.COLOR_BUFFER_BIT)
+
+		gl.BindBuffer(gl.ARRAY_BUFFER, buf)
+		gl.EnableVertexAttribArray(coord)
+		gl.VertexAttribPointer(coord, 4, gl.FLOAT, false, 0, 0)
+		gl.DrawArrays(gl.TRIANGLES, 0, len(triangleData))
+
+		w.SwapBuffers()
 		glfw.PollEvents()
-
 	}
 
-	gl.ProgramUnuse()
-}
-
-func genVertexBuffer(vtx []float32) gl.Buffer {
-	const sz = 4 // size of float32 in bytes
-
-	buffer := gl.GenBuffer()
-	buffer.Bind(gl.ARRAY_BUFFER)
-
-	gl.BufferData(gl.ARRAY_BUFFER, len(vtx)*sz, vtx, gl.STATIC_DRAW)
-
-	buffer.Unbind(gl.ARRAY_BUFFER)
-	return buffer
+	//gl.ProgramUnuse()
 }

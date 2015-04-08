@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 
-	"github.com/go-gl/gl"
-	glfw "github.com/go-gl/glfw3"
-	"github.com/go-gl/glh"
+	"github.com/go-gl-legacy/glh"
+	"github.com/go-gl/gl/v2.1/gl"
+	"github.com/go-gl/glfw/v3.1/glfw"
 )
 
 type context struct {
