@@ -1,19 +1,21 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
 
-	glfw "github.com/go-gl/glfw3"
-	"github.com/go-gl/glh"
+	"github.com/go-gl/glfw/v3.1/glfw"
+	"golang.org/x/mobile/f32"
 	"golang.org/x/mobile/gl"
+	"golang.org/x/mobile/gl/glutil"
 )
 
 const (
 	vshader = `
 #version 120
-attribute vec2 coord2d;
+attribute vec4 coord;
 void main(void) {
-  gl_Position = vec4(coord2d, 0.0, 1.0);
+  gl_Position = coord;
 }
 `
 	fshader = `
@@ -42,18 +44,10 @@ func onResize(w *glfw.Window, width, height int) {
 	//heightUnif.Uniform1i(height)
 }
 
-func initOpenGl(window *glfw.Window, w, h int) {
-	w, h = window.GetSize() // query window to get screen pixels
-	width, height := window.GetFramebufferSize()
-	gl.Viewport(0, 0, width, height)
-	gl.ClearColor(.25, .88, .83, 1) // turquoise
-}
-
 func main() {
-	glfw.SetErrorCallback(onError)
-
-	if !glfw.Init() {
-		panic("init glfw")
+	err := glfw.Init()
+	if err != nil {
+		panic(err)
 	}
 	defer glfw.Terminate()
 
@@ -69,19 +63,39 @@ func main() {
 
 	//gl.Init()
 
-	prog := glh.NewProgram(
-		glh.Shader{gl.VERTEX_SHADER, vshader},
-		glh.Shader{gl.FRAGMENT_SHADER, fshader},
-	)
-	defer prog.Delete()
-
-	prog.Link()
-
-	prog.Use()
+	prog, err := glutil.CreateProgram(vshader, fshader)
+	if err != nil {
+		panic(err)
+	}
+	defer gl.DeleteProgram(prog)
 	w.SetSizeCallback(onResize)
 	w.GetSize()
 
+	triangleData := []float32{
+		+0.0, +0.8, 0, 1,
+		-0.8, -0.8, 0, 1,
+		+0.8, -0.8, 0, 1,
+	}
+	buf := gl.CreateBuffer()
+	gl.BindBuffer(gl.ARRAY_BUFFER, buf)
+	gl.BufferData(gl.ARRAY_BUFFER,
+		f32.Bytes(binary.LittleEndian, triangleData...),
+		gl.STATIC_DRAW,
+	)
+
+	coord := gl.GetAttribLocation(prog, "coord")
+
+	gl.UseProgram(prog)
+
 	for !w.ShouldClose() {
+		gl.ClearColor(0, 0, 0, 1)
+		gl.Clear(gl.COLOR_BUFFER_BIT)
+
+		gl.BindBuffer(gl.ARRAY_BUFFER, buf)
+		gl.EnableVertexAttribArray(coord)
+		gl.VertexAttribPointer(coord, 4, gl.FLOAT, false, 0, 0)
+		gl.DrawArrays(gl.TRIANGLES, 0, len(triangleData))
+
 		w.SwapBuffers()
 		glfw.PollEvents()
 	}
