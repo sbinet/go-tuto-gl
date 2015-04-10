@@ -1,28 +1,45 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
+	"math"
+	"time"
 
-	"github.com/go-gl/gl"
-	glfw "github.com/go-gl/glfw3"
-	"github.com/go-gl/glh"
+	"github.com/go-gl/glfw/v3.1/glfw"
+	"golang.org/x/mobile/f32"
+	"golang.org/x/mobile/gl"
+	"golang.org/x/mobile/gl/glutil"
+)
+
+const (
+	deg2rad = math.Pi / 180
+)
+
+var (
+	start = time.Now()
 )
 
 type context struct {
-	w       *glfw.Window
-	prog    gl.Program
-	pos     gl.Buffer
-	col     gl.Buffer
-	fade    gl.UniformLocation
-	trans   gl.UniformLocation
+	w    *glfw.Window
+	prog gl.Program
+
+	posbuf  gl.Buffer
+	pos     gl.Attrib
 	posdata []float32
+
+	colbuf  gl.Buffer
+	col     gl.Attrib
 	coldata []float32
+
+	fade  gl.Uniform
+	trans gl.Uniform
 }
 
 func (ctx *context) Delete() {
-	ctx.prog.Delete()
-	ctx.pos.Delete()
-	ctx.col.Delete()
+	gl.DeleteProgram(ctx.prog)
+	gl.DeleteBuffer(ctx.posbuf)
+	gl.DeleteBuffer(ctx.colbuf)
 }
 
 func onError(err glfw.ErrorCode, desc string) {
@@ -47,56 +64,59 @@ func display(ctx context) {
 	gl.ClearColor(0, 0, 0, 0)
 	gl.Clear(gl.COLOR_BUFFER_BIT)
 
-	ctx.fade = ctx.prog.GetUniformLocation("fade")
-	ctx.fade.Uniform1f(0.5)
+	gl.UseProgram(ctx.prog)
 
-	ctx.trans = ctx.prog.GetUniformLocation("m_transform")
-	ctx.trans.UniformMatrix4fv(false, [16]float32{
-		1, 1, 0, 0,
-		0, 1, 0, 0,
-		0, 0, 1, 0,
-		0, 0, 0, 1,
-	})
+	/*
+			* void onIdle() {
+		  float move = sinf(glutGet(GLUT_ELAPSED_TIME) / 1000.0 * (2*3.14) / 5); // -1<->+1 every 5 seconds
+		  float angle = glutGet(GLUT_ELAPSED_TIME) / 1000.0 * 45;  // 45° per second
+		  glm::vec3 axis_z(0, 0, 1);
+		  glm::mat4 m_transform = glm::translate(glm::mat4(1.0f), glm::vec3(move, 0.0, 0.0))
+		    * glm::rotate(glm::mat4(1.0f), angle, axis_z);
+		  [...]
+	*/
 
-	ctx.col.Bind(gl.ARRAY_BUFFER)
-	colors := gl.AttribLocation(ctx.prog.GetAttribLocation("v_color"))
+	// 1<->+1 every 5 seconds
+	tx := f32.Sin(float32(time.Since(start)) / 1e9 * (2 * float32(math.Pi)) / 5.0)
 
-	ctx.pos.Bind(gl.ARRAY_BUFFER)
-	coord := gl.AttribLocation(ctx.prog.GetAttribLocation("coord"))
+	// 45-degrees per second
+	angle := float32(time.Since(start)) / 1e9 * 45 * deg2rad
 
-	coord.EnableArray()
-	colors.EnableArray()
+	m := f32.Mat4{
+		{1, 1, 1, 1},
+		{1, 1, 1, 1},
+		{1, 1, 1, 1},
+		{1, 1, 1, 1},
+	}
+	m.Translate(&m, tx, 0, 0)
+	m.Rotate(&m, f32.Radian(angle), &f32.Vec3{0, 0, 1})
 
-	coord.AttribPointer(
-		4,          // number of elements per vertex: (x,y)
-		gl.FLOAT,   // type of each element
-		false,      // take our values as-is
-		0,          // no extra data between each position
-		uintptr(0), // offset of first element
-	)
+	gl.UniformMatrix4fv(ctx.trans, flatten(&m))
+	gl.Uniform1f(ctx.fade, 0.5)
 
-	colors.AttribPointer(
-		3,          // number of elements per vertex, here (r,g,b)
-		gl.FLOAT,   // the type of each element
-		false,      // take our values as-is
-		0,          // no extra data between each position
-		uintptr(0), // offset of first element
-	)
+	gl.EnableVertexAttribArray(ctx.col)
+	gl.EnableVertexAttribArray(ctx.pos)
 
-	const sz = 4 // size of float32 in bytes
-	gl.DrawArrays(gl.TRIANGLES, 0, len(ctx.posdata)/sz)
-	coord.DisableArray()
-	colors.DisableArray()
+	gl.BindBuffer(gl.ARRAY_BUFFER, ctx.colbuf)
+	gl.VertexAttribPointer(ctx.col, 3, gl.FLOAT, false, 0, 0)
+
+	gl.BindBuffer(gl.ARRAY_BUFFER, ctx.posbuf)
+	gl.VertexAttribPointer(ctx.pos, 4, gl.FLOAT, false, 0, 0)
+
+	gl.DrawArrays(gl.TRIANGLES, 0, 3)
+
+	gl.DisableVertexAttribArray(ctx.col)
+	gl.DisableVertexAttribArray(ctx.pos)
 
 	// display result
 	ctx.w.SwapBuffers()
 }
 
 func main() {
-	glfw.SetErrorCallback(onError)
 
-	if !glfw.Init() {
-		panic("init glfw")
+	err := glfw.Init()
+	if err != nil {
+		panic(err)
 	}
 	defer glfw.Terminate()
 
@@ -107,12 +127,13 @@ func main() {
 	defer w.Destroy()
 
 	w.MakeContextCurrent()
+	w.SetSizeCallback(onResize)
+	w.SetKeyCallback(onKey)
+
 	glfw.SwapInterval(1)
 
 	gl.Enable(gl.BLEND)
 	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-
-	gl.Init()
 
 	ctx := context{
 		w: w,
@@ -127,38 +148,45 @@ func main() {
 			1.0, 0.0, 0.0,
 		},
 	}
-	ctx.pos = genBuffer(ctx.posdata)
-	ctx.col = genBuffer(ctx.coldata)
-	ctx.prog = glh.NewProgram(
-		MustShader(gl.VERTEX_SHADER, "triangle.v.glsl"),
-		MustShader(gl.FRAGMENT_SHADER, "triangle.f.glsl"),
+	ctx.prog, err = glutil.CreateProgram(
+		newShader("triangle.v.glsl"),
+		newShader("triangle.f.glsl"),
 	)
-
+	if err != nil {
+		panic(err)
+	}
 	defer ctx.Delete()
 
-	ctx.prog.Use()
-	ctx.w.SetSizeCallback(onResize)
-	ctx.w.SetKeyCallback(onKey)
+	ctx.posbuf = gl.CreateBuffer()
+	gl.BindBuffer(gl.ARRAY_BUFFER, ctx.posbuf)
+	gl.BufferData(gl.ARRAY_BUFFER,
+		f32.Bytes(binary.LittleEndian, ctx.posdata...),
+		gl.STATIC_DRAW,
+	)
+	ctx.pos = gl.GetAttribLocation(ctx.prog, "coord")
 
-	ctx.prog.Link()
+	ctx.colbuf = gl.CreateBuffer()
+	gl.BindBuffer(gl.ARRAY_BUFFER, ctx.colbuf)
+	gl.BufferData(gl.ARRAY_BUFFER,
+		f32.Bytes(binary.LittleEndian, ctx.coldata...),
+		gl.STATIC_DRAW,
+	)
+	ctx.col = gl.GetAttribLocation(ctx.prog, "v_color")
+	ctx.fade = gl.GetUniformLocation(ctx.prog, "fade")
+	ctx.trans = gl.GetUniformLocation(ctx.prog, "m_transform")
 
 	for !ctx.w.ShouldClose() {
 		display(ctx)
 		glfw.PollEvents()
 
 	}
-
-	gl.ProgramUnuse()
 }
 
-func genBuffer(data []float32) gl.Buffer {
-	const sz = 4 // size of float32 in bytes
-
-	buffer := gl.GenBuffer()
-	buffer.Bind(gl.ARRAY_BUFFER)
-
-	gl.BufferData(gl.ARRAY_BUFFER, len(data)*sz, data, gl.STATIC_DRAW)
-
-	buffer.Unbind(gl.ARRAY_BUFFER)
-	return buffer
+func flatten(m *f32.Mat4) []float32 {
+	o := make([]float32, 0, 16)
+	o = append(o, (*m)[0][:]...)
+	o = append(o, (*m)[1][:]...)
+	o = append(o, (*m)[2][:]...)
+	o = append(o, (*m)[3][:]...)
+	return o
 }
