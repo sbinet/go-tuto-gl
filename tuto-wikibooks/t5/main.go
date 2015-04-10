@@ -1,30 +1,50 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
+	"math"
+	"time"
 
-	"github.com/go-gl-legacy/glh"
-	"github.com/go-gl/gl/v2.1/gl"
 	"github.com/go-gl/glfw/v3.1/glfw"
+	"golang.org/x/mobile/f32"
+	"golang.org/x/mobile/gl"
+	"golang.org/x/mobile/gl/glutil"
+)
+
+const (
+	deg2rad = math.Pi / 180
+)
+
+var (
+	start = time.Now()
 )
 
 type context struct {
-	w       *glfw.Window
-	prog    gl.Program
-	pos     gl.Buffer
-	col     gl.Buffer
-	elt     gl.Buffer
-	fade    gl.UniformLocation
-	trans   gl.UniformLocation
+	w    *glfw.Window
+	prog gl.Program
+
+	posbuf  gl.Buffer
+	pos     gl.Attrib
 	posdata []float32
+
+	colbuf  gl.Buffer
+	col     gl.Attrib
 	coldata []float32
-	eltdata []int8
+
+	eltbuf  gl.Buffer
+	elt     gl.Attrib
+	eltdata []float32
+
+	fade  gl.Uniform
+	trans gl.Uniform
 }
 
 func (ctx *context) Delete() {
-	ctx.prog.Delete()
-	ctx.pos.Delete()
-	ctx.col.Delete()
+	gl.DeleteProgram(ctx.prog)
+	gl.DeleteBuffer(ctx.posbuf)
+	gl.DeleteBuffer(ctx.colbuf)
+	gl.DeleteBuffer(ctx.eltbuf)
 }
 
 func onError(err glfw.ErrorCode, desc string) {
@@ -44,63 +64,11 @@ func onResize(window *glfw.Window, w, h int) {
 	gl.Viewport(0, 0, w, h)
 }
 
-func display(ctx context) {
-	// clear the background as black
-	gl.ClearColor(0, 0, 0, 0)
-	gl.Clear(gl.COLOR_BUFFER_BIT)
-
-	// ctx.fade = ctx.prog.GetUniformLocation("fade")
-	// ctx.fade.Uniform1f(0.5)
-
-	ctx.trans = ctx.prog.GetUniformLocation("m_transform")
-	ctx.trans.UniformMatrix4fv(false, [16]float32{
-		1, 0, 0, 0,
-		0, 1, 0, 0,
-		0, 0, 1, 0,
-		0, 0, 0, 1,
-	})
-
-	ctx.col.Bind(gl.ELEMENT_ARRAY_BUFFER)
-	colors := gl.AttribLocation(ctx.prog.GetAttribLocation("v_color"))
-
-	ctx.pos.Bind(gl.ELEMENT_ARRAY_BUFFER)
-	coord := gl.AttribLocation(ctx.prog.GetAttribLocation("coord"))
-
-	coord.EnableArray()
-	colors.EnableArray()
-
-	coord.AttribPointer(
-		4,          // number of elements per vertex: (x,y)
-		gl.FLOAT,   // type of each element
-		false,      // take our values as-is
-		0,          // no extra data between each position
-		uintptr(0), // offset of first element
-	)
-
-	colors.AttribPointer(
-		3,          // number of elements per vertex, here (r,g,b)
-		gl.FLOAT,   // the type of each element
-		false,      // take our values as-is
-		0,          // no extra data between each position
-		uintptr(0), // offset of first element
-	)
-
-	sz := int(gl.GetBufferParameteriv(gl.ELEMENT_ARRAY_BUFFER, gl.BUFFER_SIZE))
-	ctx.elt.Bind(gl.ELEMENT_ARRAY_BUFFER)
-	gl.DrawElements(gl.TRIANGLES, sz, gl.UNSIGNED_SHORT, ctx.eltdata)
-
-	coord.DisableArray()
-	colors.DisableArray()
-
-	// display result
-	ctx.w.SwapBuffers()
-}
-
 func main() {
-	glfw.SetErrorCallback(onError)
 
-	if !glfw.Init() {
-		panic("init glfw")
+	err := glfw.Init()
+	if err != nil {
+		panic(err)
 	}
 	defer glfw.Terminate()
 
@@ -111,40 +79,54 @@ func main() {
 	defer w.Destroy()
 
 	w.MakeContextCurrent()
+	w.SetSizeCallback(onResize)
+	w.SetKeyCallback(onKey)
+
 	glfw.SwapInterval(1)
 
+	//gl.Enable(gl.DEPTH_TEST)
 	gl.Enable(gl.BLEND)
 	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-
-	gl.Init()
 
 	ctx := context{
 		w: w,
 		posdata: []float32{
-			// front
-			-1.0, -1.0, 1.0, 1,
-			+1.0, -1.0, 1.0, 1,
-			+1.0, +1.0, 1.0, 1,
-			-1.0, +1.0, 1.0, 1,
-			// back
-			-1.0, -1.0, -1.0, 1,
-			+1.0, -1.0, -1.0, 1,
-			+1.0, +1.0, -1.0, 1,
-			-1.0, +1.0, -1.0, 1,
+			+0.0, +0.8, 0, 1,
+			-0.8, -0.8, 0, 1,
+			+0.8, -0.8, 0, 1,
 		},
 		coldata: []float32{
-			// front colors
-			1.0, 0.0, 0.0,
-			0.0, 1.0, 0.0,
+			1.0, 1.0, 0.0,
 			0.0, 0.0, 1.0,
-			1.0, 1.0, 1.0,
-			// back colors
 			1.0, 0.0, 0.0,
-			0.0, 1.0, 0.0,
-			0.0, 0.0, 1.0,
-			1.0, 1.0, 1.0,
 		},
-		eltdata: []int8{
+		/*
+		    posdata: []float32{
+		   			// front
+		   			-1.0, -1.0, 1.0, 1,
+		   			+1.0, -1.0, 1.0, 1,
+		   			+1.0, +1.0, 1.0, 1,
+		   			-1.0, +1.0, 1.0, 1,
+		   			// back
+		   			// -1.0, -1.0, -1.0, 1,
+		   			// +1.0, -1.0, -1.0, 1,
+		   			// +1.0, +1.0, -1.0, 1,
+		   			//-1.0, +1.0, -1.0, 1,
+		   		},
+		   		coldata: []float32{
+		   			// front colors
+		   			1.0, 0.0, 0.0,
+		   			0.0, 1.0, 0.0,
+		   			0.0, 0.0, 1.0,
+		   			1.0, 1.0, 1.0,
+		   			// back colors
+		   			//1.0, 0.0, 0.0,
+		   			//0.0, 1.0, 0.0,
+		   			//0.0, 0.0, 1.0,
+		   			//1.0, 1.0, 1.0,
+		   		},
+		*/
+		eltdata: []float32{
 			// front
 			0, 1, 2,
 			2, 3, 0,
@@ -165,50 +147,105 @@ func main() {
 			6, 2, 1,
 		},
 	}
-	ctx.pos = genFloatBuffer(ctx.posdata)
-	ctx.col = genFloatBuffer(ctx.coldata)
-	ctx.elt = genIntBuffer(ctx.eltdata)
-	ctx.prog = glh.NewProgram(
-		MustShader(gl.VERTEX_SHADER, "cube.v.glsl"),
-		MustShader(gl.FRAGMENT_SHADER, "cube.f.glsl"),
-	)
 
+	ctx.prog, err = glutil.CreateProgram(
+		newShader("cube.v.glsl"),
+		newShader("cube.f.glsl"),
+	)
+	if err != nil {
+		panic(err)
+	}
 	defer ctx.Delete()
 
-	ctx.prog.Use()
-	ctx.w.SetSizeCallback(onResize)
-	ctx.w.SetKeyCallback(onKey)
+	ctx.posbuf = gl.CreateBuffer()
+	gl.BindBuffer(gl.ARRAY_BUFFER, ctx.posbuf)
+	gl.BufferData(gl.ARRAY_BUFFER,
+		f32.Bytes(binary.LittleEndian, ctx.posdata...),
+		gl.STATIC_DRAW,
+	)
+	ctx.pos = gl.GetAttribLocation(ctx.prog, "coord")
 
-	ctx.prog.Link()
+	ctx.colbuf = gl.CreateBuffer()
+	gl.BindBuffer(gl.ARRAY_BUFFER, ctx.colbuf)
+	gl.BufferData(gl.ARRAY_BUFFER,
+		f32.Bytes(binary.LittleEndian, ctx.coldata...),
+		gl.STATIC_DRAW,
+	)
+
+	/*
+		ctx.eltbuf = gl.CreateBuffer()
+		gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, ctx.eltbuf)
+		gl.BufferData(gl.ELEMENT_ARRAY_BUFFER,
+			f32.Bytes(binary.LittleEndian, ctx.eltdata...),
+			gl.STATIC_DRAW,
+		)
+	*/
+	ctx.col = gl.GetAttribLocation(ctx.prog, "v_color")
+	//ctx.fade = gl.GetUniformLocation(ctx.prog, "fade")
+	ctx.trans = gl.GetUniformLocation(ctx.prog, "m_transform")
 
 	for !ctx.w.ShouldClose() {
 		display(ctx)
 		glfw.PollEvents()
-
 	}
-
-	gl.ProgramUnuse()
 }
 
-func genFloatBuffer(data []float32) gl.Buffer {
-	const sz = 4 // size of float32 in bytes
+func display(ctx context) {
+	// clear the background as black
+	gl.ClearColor(0, 0, 0, 1)
+	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-	buffer := gl.GenBuffer()
-	buffer.Bind(gl.ELEMENT_ARRAY_BUFFER)
+	gl.UseProgram(ctx.prog)
 
-	gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, len(data)*sz, data, gl.STATIC_DRAW)
+	/*
+		// 1<->+1 every 5 seconds
+		tx := f32.Sin(float32(time.Since(start)) / 1e9 * (2 * float32(math.Pi)) / 5.0)
 
-	buffer.Unbind(gl.ELEMENT_ARRAY_BUFFER)
-	return buffer
+		// 45-degrees per second
+		angle := float32(time.Since(start)) / 1e9 * 45 * deg2rad
+
+		m := f32.Mat4{
+			{1, 1, 1, 1},
+			{1, 1, 1, 1},
+			{1, 1, 1, 1},
+			{1, 1, 1, 1},
+		}
+		m.Translate(&m, tx, 0, 0)
+		m.Rotate(&m, f32.Radian(angle), &f32.Vec3{0, 0, 1})
+
+		gl.UniformMatrix4fv(ctx.trans, flatten(&m))
+	*/
+	//gl.Uniform1f(ctx.fade, 0.5)
+
+	gl.EnableVertexAttribArray(ctx.col)
+	gl.EnableVertexAttribArray(ctx.pos)
+	gl.EnableVertexAttribArray(ctx.elt)
+
+	gl.BindBuffer(gl.ARRAY_BUFFER, ctx.colbuf)
+	gl.VertexAttribPointer(ctx.col, 3, gl.FLOAT, false, 0, 0)
+
+	gl.BindBuffer(gl.ARRAY_BUFFER, ctx.posbuf)
+	gl.VertexAttribPointer(ctx.pos, 4, gl.FLOAT, false, 0, 0)
+
+	gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, ctx.eltbuf)
+	// sz := gl.GetBufferParameteri(gl.ELEMENT_ARRAY_BUFFER, gl.BUFFER_SIZE)
+
+	gl.DrawElements(gl.TRIANGLES, 36, gl.FLOAT, 0)
+	//gl.DrawArrays(gl.TRIANGLES, 0, 3)
+
+	gl.DisableVertexAttribArray(ctx.col)
+	gl.DisableVertexAttribArray(ctx.pos)
+	gl.DisableVertexAttribArray(ctx.elt)
+
+	// display result
+	ctx.w.SwapBuffers()
 }
 
-func genIntBuffer(data []int8) gl.Buffer {
-
-	buffer := gl.GenBuffer()
-	buffer.Bind(gl.ELEMENT_ARRAY_BUFFER)
-
-	gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, len(data), data, gl.STATIC_DRAW)
-
-	buffer.Unbind(gl.ELEMENT_ARRAY_BUFFER)
-	return buffer
+func flatten(m *f32.Mat4) []float32 {
+	o := make([]float32, 0, 16)
+	o = append(o, (*m)[0][:]...)
+	o = append(o, (*m)[1][:]...)
+	o = append(o, (*m)[2][:]...)
+	o = append(o, (*m)[3][:]...)
+	return o
 }
