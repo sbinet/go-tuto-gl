@@ -190,7 +190,7 @@ func display(ctx context) {
 	gl.UseProgram(ctx.prog)
 
 	// // 1<->+1 every 5 seconds
-	// tx := f32.Sin(float32(time.Since(start).Seconds()) * (2 * float32(math.Pi)) / 5.0)
+	// tx := f32.Sin(float32(time.Since(start).Seconds() * 2 * math.Pi / 5.0))
 	//
 	// // 45-degrees per second
 	// angle := float32(time.Since(start).Seconds()) * 45 * deg2rad
