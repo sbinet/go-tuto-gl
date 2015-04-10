@@ -67,10 +67,10 @@ func display(ctx context) {
 	gl.UseProgram(ctx.prog)
 
 	// 1<->+1 every 5 seconds
-	tx := f32.Sin(float32(time.Since(start)) / 1e9 * (2 * float32(math.Pi)) / 5.0)
+	tx := f32.Sin(float32(time.Since(start).Seconds()) * (2 * float32(math.Pi)) / 5.0)
 
 	// 45-degrees per second
-	angle := float32(time.Since(start)) / 1e9 * 45 * deg2rad
+	angle := float32(time.Since(start).Seconds()) * 45 * deg2rad
 
 	m := f32.Mat4{
 		{1, 1, 1, 1},
@@ -78,8 +78,9 @@ func display(ctx context) {
 		{1, 1, 1, 1},
 		{1, 1, 1, 1},
 	}
-	m.Translate(&m, tx, 0, 0)
+	//m.Translate(&m, tx, 0, 0)
 	m.Rotate(&m, f32.Radian(angle), &f32.Vec3{0, 0, 1})
+	m.Translate(&m, tx, 0, 0)
 
 	gl.UniformMatrix4fv(ctx.trans, flatten(&m))
 	gl.Uniform1f(ctx.fade, 0.5)
