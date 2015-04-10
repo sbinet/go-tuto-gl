@@ -61,20 +61,10 @@ func onResize(window *glfw.Window, w, h int) {
 
 func display(ctx context) {
 	// clear the background as black
-	gl.ClearColor(0, 0, 0, 0)
+	gl.ClearColor(0, 0, 0, 1)
 	gl.Clear(gl.COLOR_BUFFER_BIT)
 
 	gl.UseProgram(ctx.prog)
-
-	/*
-			* void onIdle() {
-		  float move = sinf(glutGet(GLUT_ELAPSED_TIME) / 1000.0 * (2*3.14) / 5); // -1<->+1 every 5 seconds
-		  float angle = glutGet(GLUT_ELAPSED_TIME) / 1000.0 * 45;  // 45° per second
-		  glm::vec3 axis_z(0, 0, 1);
-		  glm::mat4 m_transform = glm::translate(glm::mat4(1.0f), glm::vec3(move, 0.0, 0.0))
-		    * glm::rotate(glm::mat4(1.0f), angle, axis_z);
-		  [...]
-	*/
 
 	// 1<->+1 every 5 seconds
 	tx := f32.Sin(float32(time.Since(start)) / 1e9 * (2 * float32(math.Pi)) / 5.0)
