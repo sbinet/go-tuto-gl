@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"runtime"
 	"time"
 
 	"github.com/go-gl/glfw/v3.1/glfw"
@@ -13,7 +14,7 @@ import (
 )
 
 const (
-	deg2rad = math.Pi / 180
+	deg2rad = math.Pi / 180.0
 )
 
 var (
@@ -34,7 +35,7 @@ type context struct {
 
 	eltbuf  gl.Buffer
 	elt     gl.Attrib
-	eltdata []float32
+	eltdata []byte
 
 	fade  gl.Uniform
 	trans gl.Uniform
@@ -65,7 +66,6 @@ func onResize(window *glfw.Window, w, h int) {
 }
 
 func main() {
-
 	err := glfw.Init()
 	if err != nil {
 		panic(err)
@@ -84,49 +84,41 @@ func main() {
 
 	glfw.SwapInterval(1)
 
-	//gl.Enable(gl.DEPTH_TEST)
-	gl.Enable(gl.BLEND)
-	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+	//	gl.Enable(gl.BLEND)
+	//	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+
+	gl.Enable(gl.DEPTH_TEST)
 
 	ctx := context{
 		w: w,
 		posdata: []float32{
-			+0.0, +0.8, 0, 1,
-			-0.8, -0.8, 0, 1,
-			+0.8, -0.8, 0, 1,
+			// front
+			-0.8, -0.8, +0.8, 1,
+			+0.8, -0.8, +0.8, 1,
+			+0.8, +0.8, +0.8, 1,
+			-0.8, +0.8, +0.8, 1,
+
+			// back
+			-0.8, -0.8, -0.8, 1,
+			+0.8, -0.8, -0.8, 1,
+			+0.8, +0.8, -0.8, 1,
+			-0.8, +0.8, -0.8, 1,
 		},
 		coldata: []float32{
-			1.0, 1.0, 0.0,
-			0.0, 0.0, 1.0,
+			// front colors
 			1.0, 0.0, 0.0,
+			0.0, 1.0, 0.0,
+			0.0, 0.0, 1.0,
+			1.0, 1.0, 1.0,
+
+			// back colors
+			1.0, 0.0, 0.0,
+			0.0, 1.0, 0.0,
+			0.0, 0.0, 1.0,
+			1.0, 1.0, 1.0,
 		},
-		/*
-		    posdata: []float32{
-		   			// front
-		   			-1.0, -1.0, 1.0, 1,
-		   			+1.0, -1.0, 1.0, 1,
-		   			+1.0, +1.0, 1.0, 1,
-		   			-1.0, +1.0, 1.0, 1,
-		   			// back
-		   			// -1.0, -1.0, -1.0, 1,
-		   			// +1.0, -1.0, -1.0, 1,
-		   			// +1.0, +1.0, -1.0, 1,
-		   			//-1.0, +1.0, -1.0, 1,
-		   		},
-		   		coldata: []float32{
-		   			// front colors
-		   			1.0, 0.0, 0.0,
-		   			0.0, 1.0, 0.0,
-		   			0.0, 0.0, 1.0,
-		   			1.0, 1.0, 1.0,
-		   			// back colors
-		   			//1.0, 0.0, 0.0,
-		   			//0.0, 1.0, 0.0,
-		   			//0.0, 0.0, 1.0,
-		   			//1.0, 1.0, 1.0,
-		   		},
-		*/
-		eltdata: []float32{
+
+		eltdata: []byte{
 			// front
 			0, 1, 2,
 			2, 3, 0,
@@ -147,7 +139,6 @@ func main() {
 			6, 2, 1,
 		},
 	}
-
 	ctx.prog, err = glutil.CreateProgram(
 		newShader("cube.v.glsl"),
 		newShader("cube.f.glsl"),
@@ -172,14 +163,13 @@ func main() {
 		gl.STATIC_DRAW,
 	)
 
-	/*
-		ctx.eltbuf = gl.CreateBuffer()
-		gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, ctx.eltbuf)
-		gl.BufferData(gl.ELEMENT_ARRAY_BUFFER,
-			f32.Bytes(binary.LittleEndian, ctx.eltdata...),
-			gl.STATIC_DRAW,
-		)
-	*/
+	ctx.eltbuf = gl.CreateBuffer()
+	gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, ctx.eltbuf)
+	gl.BufferData(gl.ELEMENT_ARRAY_BUFFER,
+		ctx.eltdata,
+		gl.STATIC_DRAW,
+	)
+
 	ctx.col = gl.GetAttribLocation(ctx.prog, "v_color")
 	//ctx.fade = gl.GetUniformLocation(ctx.prog, "fade")
 	ctx.trans = gl.GetUniformLocation(ctx.prog, "m_transform")
@@ -187,7 +177,9 @@ func main() {
 	for !ctx.w.ShouldClose() {
 		display(ctx)
 		glfw.PollEvents()
+
 	}
+
 }
 
 func display(ctx context) {
@@ -197,25 +189,22 @@ func display(ctx context) {
 
 	gl.UseProgram(ctx.prog)
 
-	/*
-		// 1<->+1 every 5 seconds
-		tx := f32.Sin(float32(time.Since(start)) / 1e9 * (2 * float32(math.Pi)) / 5.0)
-
-		// 45-degrees per second
-		angle := float32(time.Since(start)) / 1e9 * 45 * deg2rad
-
-		m := f32.Mat4{
-			{1, 1, 1, 1},
-			{1, 1, 1, 1},
-			{1, 1, 1, 1},
-			{1, 1, 1, 1},
-		}
-		m.Translate(&m, tx, 0, 0)
-		m.Rotate(&m, f32.Radian(angle), &f32.Vec3{0, 0, 1})
-
-		gl.UniformMatrix4fv(ctx.trans, flatten(&m))
-	*/
-	//gl.Uniform1f(ctx.fade, 0.5)
+	// // 1<->+1 every 5 seconds
+	// tx := f32.Sin(float32(time.Since(start).Seconds()) * (2 * float32(math.Pi)) / 5.0)
+	//
+	// // 45-degrees per second
+	// angle := float32(time.Since(start).Seconds()) * 45 * deg2rad
+	//
+	// m := f32.Mat4{
+	//         {1, 1, 1, 1},
+	//         {1, 1, 1, 1},
+	//         {1, 1, 1, 1},
+	//         {1, 1, 1, 1},
+	// }
+	// m.Translate(&m, tx, 0, 0)
+	// m.Rotate(&m, f32.Radian(angle), &f32.Vec3{0, 0, 1})
+	//
+	// gl.UniformMatrix4fv(ctx.trans, flatten(&m))
 
 	gl.EnableVertexAttribArray(ctx.col)
 	gl.EnableVertexAttribArray(ctx.pos)
@@ -228,10 +217,8 @@ func display(ctx context) {
 	gl.VertexAttribPointer(ctx.pos, 4, gl.FLOAT, false, 0, 0)
 
 	gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, ctx.eltbuf)
-	// sz := gl.GetBufferParameteri(gl.ELEMENT_ARRAY_BUFFER, gl.BUFFER_SIZE)
-
-	gl.DrawElements(gl.TRIANGLES, 36, gl.FLOAT, 0)
-	//gl.DrawArrays(gl.TRIANGLES, 0, 3)
+	sz := gl.GetBufferParameteri(gl.ELEMENT_ARRAY_BUFFER, gl.BUFFER_SIZE)
+	gl.DrawElements(gl.TRIANGLE_STRIP, sz, gl.FLOAT, 0)
 
 	gl.DisableVertexAttribArray(ctx.col)
 	gl.DisableVertexAttribArray(ctx.pos)
@@ -248,4 +235,8 @@ func flatten(m *f32.Mat4) []float32 {
 	o = append(o, (*m)[2][:]...)
 	o = append(o, (*m)[3][:]...)
 	return o
+}
+
+func init() {
+	runtime.LockOSThread()
 }
