@@ -35,7 +35,7 @@ type context struct {
 
 	eltbuf  gl.Buffer
 	elt     gl.Attrib
-	eltdata []byte
+	eltdata []uint16
 
 	fade  gl.Uniform
 	trans gl.Uniform
@@ -118,7 +118,7 @@ func main() {
 			1.0, 1.0, 1.0,
 		},
 
-		eltdata: []byte{
+		eltdata: []uint16{
 			// front
 			0, 1, 2,
 			2, 3, 0,
@@ -166,7 +166,7 @@ func main() {
 	ctx.eltbuf = gl.CreateBuffer()
 	gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, ctx.eltbuf)
 	gl.BufferData(gl.ELEMENT_ARRAY_BUFFER,
-		ctx.eltdata,
+		u16Bytes(binary.LittleEndian, ctx.eltdata...),
 		gl.STATIC_DRAW,
 	)
 
@@ -218,7 +218,7 @@ func display(ctx context) {
 
 	gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, ctx.eltbuf)
 	sz := gl.GetBufferParameteri(gl.ELEMENT_ARRAY_BUFFER, gl.BUFFER_SIZE)
-	gl.DrawElements(gl.TRIANGLE_STRIP, sz, gl.FLOAT, 0)
+	gl.DrawElements(gl.TRIANGLE_STRIP, sz, gl.UNSIGNED_SHORT, 0)
 
 	gl.DisableVertexAttribArray(ctx.col)
 	gl.DisableVertexAttribArray(ctx.pos)
@@ -235,6 +235,33 @@ func flatten(m *f32.Mat4) []float32 {
 	o = append(o, (*m)[2][:]...)
 	o = append(o, (*m)[3][:]...)
 	return o
+}
+
+// u16Bytes returns the byte representation of uint16 values in the given
+// byte order. byteOrder must be either binary.BigEndian or binary.LittleEndian.
+func u16Bytes(byteOrder binary.ByteOrder, values ...uint16) []byte {
+	le := false
+	switch byteOrder {
+	case binary.BigEndian:
+	case binary.LittleEndian:
+		le = true
+	default:
+		panic(fmt.Sprintf("invalid byte order %v", byteOrder))
+	}
+
+	b := make([]byte, 2*len(values))
+	if le {
+		for i, v := range values {
+			b[2*i+0] = byte(v >> 0)
+			b[2*i+1] = byte(v >> 8)
+		}
+	} else {
+		for i, v := range values {
+			b[2*i+0] = byte(v >> 8)
+			b[2*i+1] = byte(v >> 0)
+		}
+	}
+	return b
 }
 
 func init() {
