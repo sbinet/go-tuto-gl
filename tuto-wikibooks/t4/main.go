@@ -72,12 +72,8 @@ func display(ctx context) {
 	// 45-degrees per second
 	angle := float32(time.Since(start).Seconds()) * 45 * deg2rad
 
-	m := f32.Mat4{
-		{1, 1, 1, 1},
-		{1, 1, 1, 1},
-		{1, 1, 1, 1},
-		{1, 1, 1, 1},
-	}
+	var m f32.Mat4
+	m.Identity()
 	//m.Translate(&m, tx, 0, 0)
 	m.Rotate(&m, f32.Radian(angle), &f32.Vec3{0, 0, 1})
 	m.Translate(&m, tx, 0, 0)
