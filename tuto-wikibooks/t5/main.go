@@ -200,12 +200,12 @@ func display(ctx context) {
 
 	// glm::mat4 view = glm::lookAt(glm::vec3(0.0, 2.0, 0.0), glm::vec3(0.0, 0.0, -4.0), glm::vec3(0.0, 1.0, 0.0));
 	var view f32.Mat4
-	view.LookAt(&f32.Vec3{0, 2, 0}, &f32.Vec3{0, 0, -4}, &f32.Vec3{0, 1, 0})
+	view.LookAt(&f32.Vec3{0, 0, 2}, &f32.Vec3{0, 1, -4}, &f32.Vec3{4, 1, 2})
 
 	// glm::mat4 projection = glm::perspective(45.0f, 1.0f*screen_width/screen_height, 0.1f, 10.0f);
 	var proj f32.Mat4
 	proj.Identity()
-	proj.Perspective(f32.Radian(45*deg2rad), float32(width)/float32(height), 0.1, 10)
+	proj.Perspective(f32.Radian(60*deg2rad), float32(width)/float32(height), 0.1, 10)
 
 	// float angle = glutGet(GLUT_ELAPSED_TIME) / 1000.0 * 45;  // 45° per second
 	// glm::vec3 axis_y(0.0, 1.0, 0.0);
