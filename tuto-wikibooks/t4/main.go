@@ -168,8 +168,16 @@ func main() {
 
 	}
 }
-
 func flatten(m *f32.Mat4) []float32 {
+	o := make([]float32, 0, 16)
+	o = append(o, m[0][0], m[1][0], m[2][0], m[3][0])
+	o = append(o, m[0][1], m[1][1], m[2][1], m[3][1])
+	o = append(o, m[0][2], m[1][2], m[2][2], m[3][2])
+	o = append(o, m[0][3], m[1][3], m[2][3], m[3][3])
+	return o
+}
+
+func flattenR(m *f32.Mat4) []float32 {
 	o := make([]float32, 0, 16)
 	o = append(o, (*m)[0][:]...)
 	o = append(o, (*m)[1][:]...)

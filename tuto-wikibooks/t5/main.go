@@ -15,6 +15,8 @@ import (
 
 const (
 	deg2rad = math.Pi / 180.0
+	width   = 800
+	height  = 600
 )
 
 var (
@@ -72,7 +74,7 @@ func main() {
 	}
 	defer glfw.Terminate()
 
-	w, err := glfw.CreateWindow(640, 480, "my first triangle", nil, nil)
+	w, err := glfw.CreateWindow(width, height, "my first triangle", nil, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -93,16 +95,16 @@ func main() {
 		w: w,
 		posdata: []float32{
 			// front
-			-0.8, -0.8, +0.8, 1,
-			+0.8, -0.8, +0.8, 1,
-			+0.8, +0.8, +0.8, 1,
-			-0.8, +0.8, +0.8, 1,
+			-1, -1, +1, 1,
+			+1, -1, +1, 1,
+			+1, +1, +1, 1,
+			-1, +1, +1, 1,
 
 			// back
-			-0.8, -0.8, -0.8, 1,
-			+0.8, -0.8, -0.8, 1,
-			+0.8, +0.8, -0.8, 1,
-			-0.8, +0.8, -0.8, 1,
+			-1, -1, -1, 1,
+			+1, -1, -1, 1,
+			+1, +1, -1, 1,
+			-1, +1, -1, 1,
 		},
 		coldata: []float32{
 			// front colors
