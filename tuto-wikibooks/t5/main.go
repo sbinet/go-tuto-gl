@@ -86,8 +86,8 @@ func main() {
 
 	glfw.SwapInterval(1)
 
-	//	gl.Enable(gl.BLEND)
-	//	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+	gl.Enable(gl.BLEND)
+	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 
 	gl.Enable(gl.DEPTH_TEST)
 
