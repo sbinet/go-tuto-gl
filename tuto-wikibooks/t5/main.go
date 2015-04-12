@@ -191,22 +191,38 @@ func display(ctx context) {
 
 	gl.UseProgram(ctx.prog)
 
-	// // 1<->+1 every 5 seconds
-	// tx := f32.Sin(float32(time.Since(start).Seconds() * 2 * math.Pi / 5.0))
-	//
-	// // 45-degrees per second
-	// angle := float32(time.Since(start).Seconds()) * 45 * deg2rad
-	//
-	// m := f32.Mat4{
-	//         {1, 1, 1, 1},
-	//         {1, 1, 1, 1},
-	//         {1, 1, 1, 1},
-	//         {1, 1, 1, 1},
-	// }
-	// m.Translate(&m, tx, 0, 0)
-	// m.Rotate(&m, f32.Radian(angle), &f32.Vec3{0, 0, 1})
-	//
-	// gl.UniformMatrix4fv(ctx.trans, flatten(&m))
+	var id f32.Mat4
+	id.Identity()
+
+	//  glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0, 0.0, -4.0));
+	var model f32.Mat4
+	model.Translate(&id, 0, 0, -4)
+
+	// glm::mat4 view = glm::lookAt(glm::vec3(0.0, 2.0, 0.0), glm::vec3(0.0, 0.0, -4.0), glm::vec3(0.0, 1.0, 0.0));
+	var view f32.Mat4
+	view.LookAt(&f32.Vec3{0, 2, 0}, &f32.Vec3{0, 0, -4}, &f32.Vec3{0, 1, 0})
+
+	// glm::mat4 projection = glm::perspective(45.0f, 1.0f*screen_width/screen_height, 0.1f, 10.0f);
+	var proj f32.Mat4
+	proj.Identity()
+	proj.Perspective(f32.Radian(45*deg2rad), float32(width)/float32(height), 0.1, 10)
+
+	// float angle = glutGet(GLUT_ELAPSED_TIME) / 1000.0 * 45;  // 45° per second
+	// glm::vec3 axis_y(0.0, 1.0, 0.0);
+	// glm::mat4 anim = glm::rotate(glm::mat4(1.0f), angle, axis_y);
+	angle := float32(time.Since(start).Seconds()) * 45 * deg2rad
+	var anim f32.Mat4
+	anim.Rotate(&id, f32.Radian(angle), &f32.Vec3{0, 1, 0})
+
+	// glm::mat4 mvp = projection * view * model * anim;
+	var trans f32.Mat4
+	trans.Identity()
+	//trans.Mul(&anim, &trans)
+	trans.Mul(&model, &anim)
+	trans.Mul(&view, &trans)
+	trans.Mul(&proj, &trans)
+
+	gl.UniformMatrix4fv(ctx.trans, flatten(&trans))
 
 	gl.EnableVertexAttribArray(ctx.col)
 	gl.EnableVertexAttribArray(ctx.pos)
@@ -220,7 +236,7 @@ func display(ctx context) {
 
 	gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, ctx.eltbuf)
 	sz := gl.GetBufferParameteri(gl.ELEMENT_ARRAY_BUFFER, gl.BUFFER_SIZE)
-	gl.DrawElements(gl.TRIANGLE_STRIP, sz, gl.UNSIGNED_SHORT, 0)
+	gl.DrawElements(gl.TRIANGLES, sz, gl.UNSIGNED_SHORT, 0)
 
 	gl.DisableVertexAttribArray(ctx.col)
 	gl.DisableVertexAttribArray(ctx.pos)
@@ -232,10 +248,10 @@ func display(ctx context) {
 
 func flatten(m *f32.Mat4) []float32 {
 	o := make([]float32, 0, 16)
-	o = append(o, (*m)[0][:]...)
-	o = append(o, (*m)[1][:]...)
-	o = append(o, (*m)[2][:]...)
-	o = append(o, (*m)[3][:]...)
+	o = append(o, m[0][0], m[1][0], m[2][0], m[3][0])
+	o = append(o, m[0][1], m[1][1], m[2][1], m[3][1])
+	o = append(o, m[0][2], m[1][2], m[2][2], m[3][2])
+	o = append(o, m[0][3], m[1][3], m[2][3], m[3][3])
 	return o
 }
 
