@@ -4,14 +4,13 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"image"
-	"image/draw"
 	"image/png"
 	"runtime"
 
 	"github.com/go-gl/glfw/v3.1/glfw"
 	"github.com/sbinet/go-tuto-gl/tuto-wikibooks/glh"
 	"golang.org/x/mobile/f32"
+	"golang.org/x/mobile/geom"
 	"golang.org/x/mobile/gl"
 	"golang.org/x/mobile/gl/glutil"
 )
@@ -34,6 +33,7 @@ type context struct {
 func (ctx *context) Delete() {
 	gl.DeleteProgram(ctx.prog)
 	gl.DeleteBuffer(ctx.vbo)
+	gl.DeleteTexture(ctx.img.Texture)
 	ctx.w.Destroy()
 }
 
@@ -71,7 +71,7 @@ func main() {
 
 		tex: gl.CreateTexture(),
 		vbo: gl.CreateBuffer(),
-		img: newImage(img),
+		img: glh.NewImage(img),
 	}
 	defer ctx.Delete()
 
@@ -130,7 +130,13 @@ func display(ctx context) {
 
 	case 2:
 		ctx.img.Upload()
-		gl.Uniform1f(ctx.sprite, float32(ctx.img.Bounds().Dy()))
+		ctx.img.Draw(
+			geom.Point{0, geom.Height},
+			geom.Point{geom.Width, geom.Height},
+			geom.Point{0, 0},
+			ctx.img.RGBA.Bounds(),
+		)
+		// gl.Uniform1f(ctx.sprite, float32(ctx.img.Bounds().Dy()))
 		gl.DrawArrays(gl.POINTS, 0, npoints)
 	}
 
@@ -182,14 +188,6 @@ func onKey(w *glfw.Window, key glfw.Key, scancode int,
 			xscale = 1
 		}
 	}
-}
-
-func newImage(src image.Image) *glutil.Image {
-	b := src.Bounds()
-	img := glutil.NewImage(b.Dx(), b.Dy())
-	draw.Draw(img.RGBA, b, src, src.Bounds().Min, draw.Src)
-	img.Upload()
-	return img
 }
 
 var (
