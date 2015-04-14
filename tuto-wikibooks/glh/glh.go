@@ -26,9 +26,13 @@ func New(width, height int, title string) (*glfw.Window, error) {
 
 	gl.Enable(gl.BLEND)
 	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-	gl.Enable(gl.DEPTH_TEST)
+	//gl.Enable(gl.DEPTH_TEST)
 
 	return w, err
+}
+
+func Delete() {
+	glfw.Terminate()
 }
 
 func onError(err glfw.ErrorCode, desc string) {
