@@ -1,14 +1,18 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
+	"image/png"
 	"math"
 	"runtime"
 	"time"
 
 	"github.com/go-gl/glfw/v3.1/glfw"
+	"github.com/sbinet/go-tuto-gl/tuto-wikibooks/glh"
 	"golang.org/x/mobile/f32"
+	"golang.org/x/mobile/geom"
 	"golang.org/x/mobile/gl"
 	"golang.org/x/mobile/gl/glutil"
 )
@@ -39,6 +43,8 @@ type context struct {
 	elt     gl.Attrib
 	eltdata []uint16
 
+	img *glutil.Image
+
 	texbuf   gl.Texture
 	tex      gl.Uniform
 	texcoord gl.Attrib
@@ -52,7 +58,7 @@ func (ctx *context) Delete() {
 	gl.DeleteBuffer(ctx.posbuf)
 	gl.DeleteBuffer(ctx.colbuf)
 	gl.DeleteBuffer(ctx.eltbuf)
-	gl.DeleteTexture(ctx.texbuf)
+	gl.DeleteTexture(ctx.img.Texture)
 }
 
 func onError(err glfw.ErrorCode, desc string) {
@@ -177,11 +183,17 @@ func main() {
 		gl.STATIC_DRAW,
 	)
 
-	ctx.texbuf = gl.CreateTexture()
-	gl.BindTexture(gl.TEXTURE_2D, ctx.texbuf)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-	gl.TexImage2D(gl.TEXTURE_2D, 0, 256, 256, gl.RGB, gl.UNSIGNED_BYTE, _res_texture_png)
-
+	img, err := png.Decode(bytes.NewReader(MustAsset("res_texture.png")))
+	if err != nil {
+		panic(err)
+	}
+	ctx.img = glh.NewImage(img)
+	/*
+		ctx.texbuf = gl.CreateTexture()
+		gl.BindTexture(gl.TEXTURE_2D, ctx.texbuf)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+		gl.TexImage2D(gl.TEXTURE_2D, 0, 256, 256, gl.RGB, gl.UNSIGNED_BYTE, MustAsset("res_texture.png"))
+	*/
 	ctx.tex = gl.GetUniformLocation(ctx.prog, "mytexture")
 	ctx.texcoord = gl.GetAttribLocation(ctx.prog, "texcoord")
 
@@ -201,6 +213,14 @@ func display(ctx context) {
 	// clear the background as black
 	gl.ClearColor(0, 0, 0, 1)
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+
+	ctx.img.Upload()
+	ctx.img.Draw(
+		geom.Point{0, geom.Pt(height)},
+		geom.Point{geom.Pt(width), geom.Pt(height)},
+		geom.Point{0, 0},
+		ctx.img.RGBA.Bounds(),
+	)
 
 	gl.UseProgram(ctx.prog)
 
@@ -237,9 +257,11 @@ func display(ctx context) {
 
 	gl.UniformMatrix4fv(ctx.trans, flatten(&trans))
 
-	gl.ActiveTexture(gl.TEXTURE0)
-	gl.BindTexture(gl.TEXTURE_2D, ctx.texbuf)
-	gl.Uniform1i(ctx.tex, gl.TEXTURE)
+	/*
+		gl.ActiveTexture(gl.TEXTURE0)
+		gl.BindTexture(gl.TEXTURE_2D, ctx.texbuf)
+		gl.Uniform1i(ctx.tex, gl.TEXTURE)
+	*/
 
 	gl.EnableVertexAttribArray(ctx.col)
 	gl.EnableVertexAttribArray(ctx.pos)
@@ -258,6 +280,12 @@ func display(ctx context) {
 	gl.DisableVertexAttribArray(ctx.col)
 	gl.DisableVertexAttribArray(ctx.pos)
 	gl.DisableVertexAttribArray(ctx.elt)
+	ctx.img.Draw(
+		geom.Point{0, geom.Pt(height)},
+		geom.Point{geom.Pt(width), geom.Pt(height)},
+		geom.Point{0, 0},
+		ctx.img.RGBA.Bounds(),
+	)
 
 	// display result
 	ctx.w.SwapBuffers()
