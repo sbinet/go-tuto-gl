@@ -7,3 +7,4 @@ The first [set](https://github.com/sbinet/go-tuto-gl/tree/master/tuto-wikibooks)
 
 The second [set](https://github.com/sbinet/go-tuto-gl/tree/master/tuto-open.gl) of programs is following the tutorials from [open.gl](https://open.gl)
 
+Another set of tutos: http://www.opengl-tutorial.org/
